@@ -875,10 +875,11 @@ function AgentGanttPanel({ entitiesData, logs }) {
                       key={`spawn-${idx}`}
                       d={pathData.path}
                       stroke="#888"
-                      strokeWidth="1.5"
+                      strokeWidth="1.0"
+                      strokeDasharray="4,3"
                       fill="none"
                       markerEnd="url(#arrow-spawn)"
-                      style={{ pointerEvents: 'stroke' }}
+                      style={{ pointerEvents: 'stroke', opacity: 0.6 }}
                       data-tooltip-id="gantt-tooltip"
                       data-tooltip-content={tooltipContent}
                     />
@@ -919,11 +920,10 @@ function AgentGanttPanel({ entitiesData, logs }) {
                       key={`content-${idx}`}
                       d={pathData.path}
                       stroke="#8b5cf6"
-                      strokeWidth="1.5"
-                      strokeDasharray="5,5"
+                      strokeWidth="2.0"
                       fill="none"
                       markerEnd="url(#arrow-content)"
-                      style={{ pointerEvents: 'stroke', opacity: 0.7 }}
+                      style={{ pointerEvents: 'stroke', opacity: 0.8 }}
                       data-tooltip-id="gantt-tooltip"
                       data-tooltip-content={`Content Reuse: ${edge.sourceAgentId} → ${edge.targetAgentId}\nHash: ${edge.content_hash}\nConfidence: ${edge.confidence}`}
                     />

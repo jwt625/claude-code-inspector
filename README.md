@@ -1,5 +1,9 @@
 # Claude Code Workflow Analysis
 
+<p align="center">
+  <img src="proxy/viewer/gantt-icon.svg" alt="Agent Gantt Icon" width="150">
+</p>
+
 Comprehensive tools for analyzing, tracking, and visualizing Claude Code agent workflows.
 
 ## Overview
@@ -14,14 +18,14 @@ This project provides a complete suite of tools to:
 
 ## Features
 
-### 🔍 Entity Extraction
+### Entity Extraction
 
 - Parse JSONL request logs from Claude Code proxy
 - Extract all entities: requests, responses, messages, content blocks, tools, tasks, agents
 - Deduplicate entities while preserving references
 - Export to structured JSON format
 
-### 🤖 Agent Instance Tracking
+### Agent Instance Tracking
 
 - Identify unique agent instances across requests
 - Track conversation continuations
@@ -29,7 +33,7 @@ This project provides a complete suite of tools to:
 - Compute conversation fingerprints
 - Track tool usage per agent
 
-### 📊 Workflow DAG
+### Workflow DAG
 
 - Build directed acyclic graph of agent interactions
 - Track spawn edges (parent → child agents)
@@ -45,6 +49,20 @@ This project provides a complete suite of tools to:
 - **Workflow graph**: D3.js force-directed graph with zoom/pan
 - **Agent Gantt chart**: Timeline view with spawn arrows showing parent-child relationships
 - **Request-level nodes**: Each node = one API request, click to inspect
+
+#### Screenshots
+
+<p align="center">
+  <img src="public/example01.png" alt="Workflow Visualization Example 1" width="800">
+  <br>
+  <em>Agent Gantt Chart showing agent spawning and merging patterns</em>
+</p>
+
+<p align="center">
+  <img src="public/example02.png" alt="Workflow Visualization Example 2" width="800">
+  <br>
+  <em>Workflow Graph with force-directed layout</em>
+</p>
 
 ## Quick Start
 
