@@ -148,7 +148,15 @@ python proxy_server.py
 
 Then configure Claude Code to use the proxy:
 ```bash
-export ANTHROPIC_API_URL=http://localhost:8080
+export ANTHROPIC_API_URL=http://127.0.0.1:58734
+```
+or create a settings file for Claude Code (see `.claude/settings.json.example` for an example):
+```json
+{
+    "env": {
+        "ANTHROPIC_BASE_URL": "http://127.0.0.1:58734"
+    }
+}
 ```
 
 ## Key Concepts
