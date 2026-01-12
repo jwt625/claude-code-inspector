@@ -223,3 +223,5 @@ MIT
 
 Built for analyzing Claude Code workflows and understanding agentic AI behavior.
 
+This is for educational purpose.
+
