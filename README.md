@@ -172,7 +172,8 @@ A directed acyclic graph showing:
 Each node represents a single API request:
 - Label: `agent_4 [2/3] - 7:45:06 PM`
 - Click to view full conversation
-- Sequential edges (gray) and spawn edges (green)
+- Sequential edges (blue) and spawn edges (grey)
+- merge back edges (purple)
 
 ## Statistics Example
 
@@ -216,7 +217,7 @@ Contributions welcome! Please:
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT
 
 ## Acknowledgments
 
