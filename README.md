@@ -53,15 +53,8 @@ This project provides a complete suite of tools to:
 #### Screenshots
 
 <p align="center">
-  <img src="public/example01.png" alt="Workflow Visualization Example 1" width="800">
-  <br>
-  <em>Agent Gantt Chart showing agent spawning and merging patterns</em>
-</p>
-
-<p align="center">
-  <img src="public/example02.png" alt="Workflow Visualization Example 2" width="800">
-  <br>
-  <em>Workflow Graph with force-directed layout</em>
+  <img src="public/example01.png" alt="Workflow Visualization Example 1" width="49%">
+  <img src="public/example02.png" alt="Workflow Visualization Example 2" width="49%">
 </p>
 
 ## Quick Start
