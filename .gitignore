@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment and config (keep examples)
+.env
+.env.local
+.claude/settings.json
+.claude/settings.json.bak
+.claude/settings.local.json
+
+# Logs and generated data
+*.jsonl
+proxy/logs/*.json
+proxy/logs/**/*.json
+proxy/logs/**/*.jsonl
+entities_*.json
+.enriched_cache.pkl
+*.pkl
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+proxy/viewer/dist/
