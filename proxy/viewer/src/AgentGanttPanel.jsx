@@ -14,6 +14,7 @@ function AgentGanttPanel({ entitiesData, logs }) {
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [selectedAgent, setSelectedAgent] = useState(null)
   const [containerHeight, setContainerHeight] = useState(0)
+  const [containerWidth, setContainerWidth] = useState(0)
   const timelineRef = useRef(null)
   const rowsRef = useRef(null)
   const containerRef = useRef(null)
@@ -275,40 +276,42 @@ function AgentGanttPanel({ entitiesData, logs }) {
     return markers
   }, [minTime, duration, zoomX])
 
-  // Measure container height (use ResizeObserver for better detection)
+  // Measure container dimensions (use ResizeObserver for better detection)
   useEffect(() => {
-    const measureHeight = () => {
+    const measureDimensions = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect()
         const newHeight = rect.height
-        console.log('Container height measured:', newHeight)
+        const newWidth = rect.width
+        console.log('Container dimensions measured:', newWidth, 'x', newHeight)
         setContainerHeight(newHeight)
+        setContainerWidth(newWidth)
       }
     }
 
-    measureHeight()
+    measureDimensions()
 
-    // Use ResizeObserver for better height tracking
+    // Use ResizeObserver for better dimension tracking
     const resizeObserver = new ResizeObserver(() => {
-      measureHeight()
+      measureDimensions()
     })
 
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current)
     }
 
-    window.addEventListener('resize', measureHeight)
+    window.addEventListener('resize', measureDimensions)
 
     return () => {
       resizeObserver.disconnect()
-      window.removeEventListener('resize', measureHeight)
+      window.removeEventListener('resize', measureDimensions)
     }
   }, [])
 
-  // Debug: log when height or agents change
+  // Debug: log when dimensions or agents change
   useEffect(() => {
-    console.log('Container height:', containerHeight, 'Visible agents:', visibleAgents.length, 'Row height:', rowHeight, 'Needs scroll:', needsScroll)
-  }, [containerHeight, visibleAgents.length, rowHeight, needsScroll])
+    console.log('Container dimensions:', containerWidth, 'x', containerHeight, 'Visible agents:', visibleAgents.length, 'Row height:', rowHeight, 'Needs scroll:', needsScroll)
+  }, [containerWidth, containerHeight, visibleAgents.length, rowHeight, needsScroll])
 
   // Calculate position and width for bars based on X-axis zoom
   const getBarStyle = (request) => {
@@ -810,8 +813,8 @@ function AgentGanttPanel({ entitiesData, logs }) {
                 style={{
                   position: 'absolute',
                   top: 0,
-                  left: 0,
-                  width: '100%',
+                  left: '10px',
+                  width: 'calc(100% - 20px)',
                   height: `${visibleAgents.length * rowHeight * 1.2 + rowHeight * 0.6}px`,
                   pointerEvents: 'none',
                   zIndex: 5
@@ -854,8 +857,10 @@ function AgentGanttPanel({ entitiesData, logs }) {
                 </defs>
                 {/* Spawn edges */}
                 {spawnEdges.map((edge, idx) => {
-                  const containerWidth = rowsRef.current.clientWidth
-                  const pathData = getSpawnArrowPath(edge, containerWidth)
+                  // Calculate SVG width from container width:
+                  // containerWidth - 200px (labels) - 20px (gantt-rows padding) - 20px (SVG offset/width reduction)
+                  const svgWidth = Math.max(100, containerWidth - 240)
+                  const pathData = getSpawnArrowPath(edge, svgWidth)
 
                   if (!pathData) return null
 
@@ -888,8 +893,9 @@ function AgentGanttPanel({ entitiesData, logs }) {
 
                 {/* Request sequence edges */}
                 {requestSequenceEdges.map((edge, idx) => {
-                  const containerWidth = rowsRef.current.clientWidth
-                  const pathData = getRequestSequenceArrowPath(edge, containerWidth)
+                  // Calculate SVG width from container width
+                  const svgWidth = Math.max(100, containerWidth - 240)
+                  const pathData = getRequestSequenceArrowPath(edge, svgWidth)
 
                   if (!pathData) return null
 
@@ -910,8 +916,9 @@ function AgentGanttPanel({ entitiesData, logs }) {
 
                 {/* Content reuse edges */}
                 {contentReuseEdges.map((edge, idx) => {
-                  const containerWidth = rowsRef.current.clientWidth
-                  const pathData = getSpawnArrowPath(edge, containerWidth)
+                  // Calculate SVG width from container width
+                  const svgWidth = Math.max(100, containerWidth - 240)
+                  const pathData = getSpawnArrowPath(edge, svgWidth)
 
                   if (!pathData) return null
 
