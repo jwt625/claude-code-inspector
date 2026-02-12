@@ -46,14 +46,34 @@ def log_entry(entry: dict) -> None:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def parse_sse_stream(stream_data: str) -> dict[str, Any]:
+def parse_sse_stream(stream_data: str, format_hint: str = "auto") -> dict[str, Any]:
     """
     Parse Server-Sent Events stream and aggregate into a single response.
+
+    Supports both Anthropic and OpenAI SSE formats.
+
+    Args:
+        stream_data: Raw SSE stream text
+        format_hint: "anthropic", "openai", or "auto" to detect format
 
     Returns a dict with the aggregated message content and metadata.
     """
     lines = stream_data.strip().split('\n')
 
+    # Detect format if auto
+    if format_hint == "auto":
+        # Anthropic uses "event: " prefix, OpenAI doesn't
+        has_event_prefix = any(line.startswith('event: ') for line in lines[:20])
+        format_hint = "anthropic" if has_event_prefix else "openai"
+
+    if format_hint == "openai":
+        return _parse_openai_sse_stream(lines)
+    else:
+        return _parse_anthropic_sse_stream(lines)
+
+
+def _parse_anthropic_sse_stream(lines: list[str]) -> dict[str, Any]:
+    """Parse Anthropic-format SSE stream (event: + data: format)."""
     message_data = {
         "id": None,
         "type": "message",
@@ -131,6 +151,69 @@ def parse_sse_stream(stream_data: str) -> dict[str, Any]:
     return message_data
 
 
+def _parse_openai_sse_stream(lines: list[str]) -> dict[str, Any]:
+    """Parse OpenAI-format SSE stream (data: only, ends with data: [DONE])."""
+    message_data = {
+        "id": None,
+        "type": "message",
+        "role": "assistant",
+        "content": [],
+        "model": None,
+        "finish_reason": None,
+        "usage": None
+    }
+
+    text_content = ""
+
+    for line in lines:
+        line = line.strip()
+
+        if line.startswith('data: '):
+            data_str = line[6:]
+
+            # Check for [DONE] marker
+            if data_str == '[DONE]':
+                break
+
+            try:
+                data = json.loads(data_str)
+
+                # Extract metadata from first chunk
+                if message_data['id'] is None:
+                    message_data['id'] = data.get('id')
+                    message_data['model'] = data.get('model')
+
+                # Extract content deltas
+                choices = data.get('choices', [])
+                if choices:
+                    choice = choices[0]
+                    delta = choice.get('delta', {})
+
+                    # Accumulate text content
+                    if 'content' in delta and delta['content']:
+                        text_content += delta['content']
+
+                    # Check for finish reason
+                    if 'finish_reason' in choice and choice['finish_reason']:
+                        message_data['finish_reason'] = choice['finish_reason']
+
+                # Extract usage if present (usually in last chunk)
+                if 'usage' in data:
+                    message_data['usage'] = data['usage']
+
+            except json.JSONDecodeError:
+                continue
+
+    # Add accumulated text as content block
+    if text_content:
+        message_data['content'].append({
+            'type': 'text',
+            'text': text_content
+        })
+
+    return message_data
+
+
 def is_sse_stream(content: bytes, headers: dict) -> bool:
     """Check if the response is a Server-Sent Events stream."""
     content_type = headers.get('content-type', headers.get('Content-Type', ''))
@@ -148,20 +231,20 @@ def is_sse_stream(content: bytes, headers: dict) -> bool:
 @app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 def proxy(path: str) -> Response:
     """Proxy all requests to upstream server with logging."""
-    
+
     if not UPSTREAM_URL:
         return Response(
             json.dumps({"error": "UPSTREAM_URL not configured"}),
             status=500,
             content_type="application/json"
         )
-    
+
     upstream_url = f"{UPSTREAM_URL}/{path}"
-    
+
     # Prepare request data
     headers = {k: v for k, v in request.headers if k.lower() != "host"}
     body = request.get_data()
-    
+
     # Parse request body for logging
     request_body = None
     if body:
@@ -169,7 +252,7 @@ def proxy(path: str) -> Response:
             request_body = json.loads(body)
         except json.JSONDecodeError:
             request_body = body.decode("utf-8", errors="replace")
-    
+
     # Log request
     request_timestamp = datetime.utcnow()
     log_data = {
@@ -193,58 +276,151 @@ def proxy(path: str) -> Response:
             timeout=600,
         )
 
-        # Collect response data
-        response_body = upstream_response.content
-        response_timestamp = datetime.utcnow()
+        # Check if this is a streaming response
+        response_headers = dict(upstream_response.headers)
+        content_type = response_headers.get('content-type', response_headers.get('Content-Type', ''))
+        is_streaming = 'text/event-stream' in content_type
 
-        # Parse response body for logging
-        response_body_parsed = None
-        if response_body:
-            # Check if this is an SSE stream
-            if is_sse_stream(response_body, dict(upstream_response.headers)):
-                try:
-                    stream_text = response_body.decode("utf-8", errors="replace")
-                    response_body_parsed = parse_sse_stream(stream_text)
-                except Exception as e:
-                    # If parsing fails, log the raw stream (truncated)
-                    response_body_parsed = {
-                        "error": f"Failed to parse SSE stream: {str(e)}",
-                        "raw_preview": response_body.decode("utf-8", errors="replace")[:1000]
-                    }
-            else:
-                try:
-                    response_body_parsed = json.loads(response_body)
-                except json.JSONDecodeError:
-                    response_body_parsed = response_body.decode("utf-8", errors="replace")
+        if is_streaming:
+            # Handle streaming response
+            return _handle_streaming_response(
+                upstream_response,
+                log_data,
+                request_timestamp
+            )
+        else:
+            # Handle non-streaming response (original behavior)
+            return _handle_buffered_response(
+                upstream_response,
+                log_data,
+                request_timestamp
+            )
 
-        # Log response
-        duration_ms = (response_timestamp - request_timestamp).total_seconds() * 1000
-        log_data["response"] = {
-            "status": upstream_response.status_code,
-            "headers": redact_headers(dict(upstream_response.headers)),
-            "body": response_body_parsed,
-            "timestamp": response_timestamp.isoformat() + "Z",
-            "duration_ms": round(duration_ms, 2),
-        }
-        log_entry(log_data)
-        
-        # Return response to client
-        return Response(
-            response_body,
-            status=upstream_response.status_code,
-            headers=dict(upstream_response.headers),
-        )
-        
     except requests.exceptions.RequestException as e:
         # Log error
         log_data["error"] = str(e)
         log_entry(log_data)
-        
+
         return Response(
             json.dumps({"error": f"Proxy error: {str(e)}"}),
             status=502,
             content_type="application/json"
         )
+
+
+def _handle_buffered_response(
+    upstream_response: requests.Response,
+    log_data: dict,
+    request_timestamp: datetime
+) -> Response:
+    """Handle non-streaming responses (original buffered behavior)."""
+    # Collect response data
+    response_body = upstream_response.content
+    response_timestamp = datetime.utcnow()
+
+    # Parse response body for logging
+    response_body_parsed = None
+    if response_body:
+        try:
+            response_body_parsed = json.loads(response_body)
+        except json.JSONDecodeError:
+            response_body_parsed = response_body.decode("utf-8", errors="replace")
+
+    # Log response
+    duration_ms = (response_timestamp - request_timestamp).total_seconds() * 1000
+    log_data["response"] = {
+        "status": upstream_response.status_code,
+        "headers": redact_headers(dict(upstream_response.headers)),
+        "body": response_body_parsed,
+        "timestamp": response_timestamp.isoformat() + "Z",
+        "duration_ms": round(duration_ms, 2),
+    }
+    log_entry(log_data)
+
+    # Return response to client
+    return Response(
+        response_body,
+        status=upstream_response.status_code,
+        headers=dict(upstream_response.headers),
+    )
+
+
+def _handle_streaming_response(
+    upstream_response: requests.Response,
+    log_data: dict,
+    request_timestamp: datetime
+) -> Response:
+    """Handle streaming SSE responses with real-time passthrough and logging."""
+
+    # Accumulate chunks for logging
+    accumulated_chunks = []
+
+    def generate():
+        """Generator that yields chunks while accumulating for logging."""
+        try:
+            for chunk in upstream_response.iter_content(chunk_size=None):
+                if chunk:
+                    # Accumulate for logging
+                    accumulated_chunks.append(chunk)
+                    # Stream to client immediately
+                    yield chunk
+        finally:
+            # Log after streaming completes
+            _log_streaming_response(
+                accumulated_chunks,
+                upstream_response,
+                log_data,
+                request_timestamp
+            )
+
+    # Prepare response headers (preserve streaming headers)
+    response_headers = dict(upstream_response.headers)
+    # Remove Content-Length if present (streaming uses chunked transfer)
+    response_headers.pop('Content-Length', None)
+    response_headers.pop('content-length', None)
+
+    return Response(
+        generate(),
+        status=upstream_response.status_code,
+        headers=response_headers,
+    )
+
+
+def _log_streaming_response(
+    accumulated_chunks: list[bytes],
+    upstream_response: requests.Response,
+    log_data: dict,
+    request_timestamp: datetime
+) -> None:
+    """Log streaming response after it completes."""
+    response_timestamp = datetime.utcnow()
+
+    # Combine all chunks
+    response_body = b''.join(accumulated_chunks)
+
+    # Parse response body for logging
+    response_body_parsed = None
+    if response_body:
+        try:
+            stream_text = response_body.decode("utf-8", errors="replace")
+            response_body_parsed = parse_sse_stream(stream_text)
+        except Exception as e:
+            # If parsing fails, log the raw stream (truncated)
+            response_body_parsed = {
+                "error": f"Failed to parse SSE stream: {str(e)}",
+                "raw_preview": response_body.decode("utf-8", errors="replace")[:1000]
+            }
+
+    # Log response
+    duration_ms = (response_timestamp - request_timestamp).total_seconds() * 1000
+    log_data["response"] = {
+        "status": upstream_response.status_code,
+        "headers": redact_headers(dict(upstream_response.headers)),
+        "body": response_body_parsed,
+        "timestamp": response_timestamp.isoformat() + "Z",
+        "duration_ms": round(duration_ms, 2),
+    }
+    log_entry(log_data)
 
 
 @app.route("/")
